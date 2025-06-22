@@ -1,0 +1,43 @@
+{
+  "realm" : "rhdh-local",
+  "users" : [ {
+    "id" : "0ba47c23-6a7c-42cc-9a98-b34bbed10735",
+    "username" : "bob",
+    "firstName" : "bob",
+    "email" : "bob@mail.com",
+    "emailVerified" : false,
+    "createdTimestamp" : 1750274941209,
+    "enabled" : true,
+    "totp" : false,
+    "credentials" : [ {
+      "id" : "ba764ccc-5dc3-4569-a4e2-556d80da8b72",
+      "type" : "password",
+      "userLabel" : "My password",
+      "createdDate" : 1750274961838,
+      "secretData" : "{\"value\":\"iKqLxgHX4lbzwhbnxnLNSChRET+80+/DZNp/hWxioRM=\",\"salt\":\"+Gn6Rag77sIOkgVXgYaLpw==\",\"additionalParameters\":{}}",
+      "credentialData" : "{\"hashIterations\":5,\"algorithm\":\"argon2\",\"additionalParameters\":{\"hashLength\":[\"32\"],\"memory\":[\"7168\"],\"type\":[\"id\"],\"version\":[\"1.3\"],\"parallelism\":[\"1\"]}}"
+    } ],
+    "disableableCredentialTypes" : [ ],
+    "requiredActions" : [ ],
+    "realmRoles" : [ "default-roles-rhdh-local" ],
+    "notBefore" : 0,
+    "groups" : [ ]
+  }, {
+    "id" : "c1adc7cb-b7be-454f-9dbc-b684e625e35a",
+    "username" : "service-account-rhdh-local-client",
+    "emailVerified" : false,
+    "createdTimestamp" : 1750591414124,
+    "enabled" : true,
+    "totp" : false,
+    "serviceAccountClientId" : "rhdh-local-client",
+    "credentials" : [ ],
+    "disableableCredentialTypes" : [ ],
+    "requiredActions" : [ ],
+    "realmRoles" : [ "default-roles-rhdh-local" ],
+    "clientRoles" : {
+      "realm-management" : [ "query-groups", "manage-users", "query-users", "view-users" ]
+    },
+    "notBefore" : 0,
+    "groups" : [ ]
+  } ]
+}
