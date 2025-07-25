@@ -1,0 +1,38 @@
+# This Compose file is not usable on its own.
+# It needs to be used alongside the default compose.yaml file,
+# since it overrides the containers defined in the latter
+# and injects a new proxy container and adds a new network.
+#
+# You can run `docker compose -f compose.yaml -f keycloak/compose.yaml config`
+# to view the effective merged config.
+services:
+  nginx:
+    image: nginx
+    ports:
+      - 8080:80
+    volumes:
+      - ./keycloak/config/app.conf:/etc/nginx/conf.d/app.conf:Z
+    depends_on:
+      - rhdh
+      - keycloak
+  rhdh:
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    hostname: dev.rhdh-local.com
+  keycloak:
+    build:
+      context: ./keycloak
+      dockerfile: dockerfile
+    container_name: keycloak
+    hostname: example.keycloak.com
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin_pass
+      - KC_PROXY=edge
+    command: 'start-dev --import-realm' 
+    volumes:
+      - ./keycloak/config/rhdh-local-realm.json:/opt/keycloak/data/import/rhdh-local-realm.json:Z
+      - ./keycloak/config/rhdh-local-users-0.json:/opt/keycloak/data/import/rhdh-local-users-0.json:Z
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080;echo -e 'GET /health/ready HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;"]
