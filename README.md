@@ -78,6 +78,7 @@ If you would like to change your RHDH-Local setup, or add additional features or
 4. [PostgreSQL Guide](docs/rhdh-local-guide/postgresql-guide.md) - using PostgreSQL instead of an in-memory database
 5. [Orchestrator Workflow Guide](./orchestrator/README.md) - using Orchestrator with RHDH to develop workflows.
 6. [Developer Lightspeed Guide](./developer-lightspeed/README.md) - using Developer Lightspeed in RHDH Local.
+7. [keycloak Guide](./keycloak/docs/keycloak-guide.md) - using Keycloak with RHDH as auth and catalog provider.
 
 ## Contributing and reporting issues
 
