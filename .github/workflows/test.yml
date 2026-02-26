@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Lint
       # Based on https://github.com/zavoloklom/docker-compose-linter/tree/main?tab=readme-ov-file
       run: |
@@ -43,34 +43,105 @@ jobs:
             cliArgs: "-f compose.yaml -f compose-with-corporate-proxy.yaml"
           - name: "dynamic-plugins-root"
             cliArgs: "-f compose.yaml -f compose-dynamic-plugins-root.yaml"
-          # TODO(jenniferubah): Uncomment this when https://issues.redhat.com/browse/FLPATH-2500 is resolved.
-#         - name: "orchestrator-workflow"
-#           cliArgs: "-f compose.yaml -f orchestrator/compose.yaml"
+          - name: "orchestrator-workflow"
+            cliArgs: "-f compose.yaml -f orchestrator/compose.yaml"
+          - name: "developer-lightspeed-minimal"
+            cliArgs: "-f compose.yaml -f developer-lightspeed/compose.yaml"
+          - name: "developer-lightspeed"
+            cliArgs: "-f compose.yaml -f developer-lightspeed/compose-with-ollama.yaml"
 
-    name: "${{ matrix.tool }} compose - ${{ matrix.composeConfig.name }}"
+    name: "${{ matrix.tool }} compose - ${{ matrix.composeConfig.name }}${{ matrix.userConfig == 'true' && ' - user config' || '' }}"
     runs-on: ubuntu-latest
     env:
+      DOCKER_COMPOSE_VERSION: v5.0.1
+      PODMAN_IMAGE: quay.io/podman/stable:v5
       # The default corporate proxy image is located on registry.redhat.io, which requires authentication.
       CORPORATE_PROXY_IMAGE: docker.io/ubuntu/squid:latest
-      # To be able to call the "podman compose" wrapper using the "podman-compose" binary
-      PODMAN_COMPOSE_PROVIDER: "podman-compose"
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
-    - name: Install tool
-      if: ${{ matrix.tool == 'podman' }}
-      env:
-        PODMAN_COMPOSE_VERSION: "v1.3.0"
+    - name: Remove conflicting packages
       run: |
-        pip3 install podman-compose=="${PODMAN_COMPOSE_VERSION}"
+        # Remove any previous installations of Podman and Docker
+        for pkg in docker.io \
+            docker-doc \
+            docker-compose \
+            docker-compose-v2 \
+            podman-docker \
+            containerd \
+            crun \
+            runc \
+            buildah \
+          ; do
+          sudo apt-get remove --purge -y $pkg || true
+        done
+
+    - name: Update Docker version
+      # https://docs.docker.com/engine/install/ubuntu#install-using-the-repository
+      # Docker is also needed for Podman tests (to run the Podman container)
+      run: |
+        # Add Docker's official GPG key:
+        sudo apt-get update
+        sudo apt-get install ca-certificates curl
+        sudo install -m 0755 -d /etc/apt/keyrings
+        sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+        sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+        # Add the repository to Apt sources:
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+          $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        sudo apt-get update
+        sudo apt-get install -y docker-ce \
+          docker-ce-cli \
+          containerd.io \
+          docker-buildx-plugin
+
+        # Install standalone docker-compose for consistent version across docker/podman tests
+        echo "Installing docker-compose $DOCKER_COMPOSE_VERSION..."
+        sudo curl -fsSL "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+          -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+        # Also install as Docker CLI plugin
+        sudo mkdir -p /usr/local/lib/docker/cli-plugins
+        sudo ln -sf /usr/local/bin/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
+
+    - name: Setup Podman container environment
+      id: setup-podman
+      if: ${{ matrix.tool == 'podman' }}
+      uses: rm3l/setup-containerized-podman@9d660ce477edb95b5ac6e27694ac43abaee18953 # v1
+      with:
+        podman-image: ${{ env.PODMAN_IMAGE }}
+        compose-provider: docker-compose
+        docker-compose-version: ${{ env.DOCKER_COMPOSE_VERSION }}
+        env: |
+          CORPORATE_PROXY_IMAGE=${{ env.CORPORATE_PROXY_IMAGE }}
+
+    - name: Display container engine version
+      run: |
+        echo "*** ${{ matrix.tool }} version ***"
+        ${{ matrix.tool }} version
+        echo
+        echo "*** ${{ matrix.tool }} compose version ***"
+        ${{ matrix.tool }} compose version
+
+    - name: ${{ matrix.tool }} info
+      run: ${{ matrix.tool }} info
+
+    - name: Compose config
+      run: ${{ matrix.tool }} compose ${{ matrix.composeConfig.cliArgs }} config
 
     - name: Add user-specific configuration
       if: ${{ matrix.userConfig == 'true' }}
+      env:
+        # https://docs.github.com/en/actions/how-tos/monitor-workflows/enable-debug-logging#enabling-runner-diagnostic-logging
+        LOG_LEVEL: ${{ vars.ACTIONS_RUNNER_DEBUG == 'true' && 'debug' || 'info' }}
       run: |
         # Custom .env file
         cat <<EOF > .env
-        LOG_LEVEL=debug
+        LOG_LEVEL=${{ env.LOG_LEVEL }}
         ROARR_LOG=true
         NODE_DEBUG=fetch
 
@@ -116,27 +187,44 @@ jobs:
 
     - name: Wait for HTTP 200 response from homepage
       run: |
-        max=30
+        max=50
         i=0
         echo "Waiting for localhost to respond with status code 200..."
-        until curl --head --fail http://localhost:7007; do
+        until curl -i --head --fail http://localhost:7007; do
           i=$((i+1))
           if [ "$i" -ge "$max" ]; then
-            echo "Max retries reached. Exiting. Take a look at the logs in the step below."
+            echo "[$(date)] Max retries reached. Exiting. Take a look at the logs in the step below."
             exit 1
           fi
-          echo "($i/$max)Waiting for http://localhost:7007 to return HTTP 200..."
-          sleep 5
+          echo "($i/$max) [$(date)] Waiting for http://localhost:7007 to return HTTP 200..."
+          sleep 10
         done
-        echo "RHDH is ready!"
+        echo "[$(date)] RHDH is ready"
         curl -i --insecure http://localhost:7007
+
+    - name: curl from RHDH Container (for troubleshooting)
+      if: failure()
+      run: |
+        ${{ matrix.tool }} exec rhdh curl -i --head --fail http://localhost:7007
 
     - name: Compose logs
       if: always()
-      run: ${{ matrix.tool }} compose ${{ matrix.composeConfig.cliArgs }} logs
+      run: |
+        for svc in $(${{ matrix.tool }} compose ${{ matrix.composeConfig.cliArgs }} config --services | sort); do
+          echo "*** $svc ***"
+          ${{ matrix.tool }} compose ${{ matrix.composeConfig.cliArgs }} logs --timestamps "$svc" || true
+          echo "************"
+          echo
+        done
 
     - name: Tear down
       if: always()
       run: |
         ${{ matrix.tool }} compose ${{ matrix.composeConfig.cliArgs }} ps || true
         ${{ matrix.tool }} compose ${{ matrix.composeConfig.cliArgs }} down --volumes || true
+
+    - name: Cleanup Podman container environment
+      if: ${{ always() && matrix.tool == 'podman' }}
+      run: |
+        docker container stop ${{ steps.setup-podman.outputs.container-name }} || true
+        docker container rm ${{ steps.setup-podman.outputs.container-name }} || true

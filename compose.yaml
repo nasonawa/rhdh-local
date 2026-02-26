@@ -1,7 +1,7 @@
 services:
   # Uncomment the following block to use a PostgreSQL database
   # don't forget to also uncomment 'depends_on' 'db' section in the rhdh service
-  # and commentout or delete 'database' section in the app-config.local.yaml
+  # and comment out or delete 'database' section in app-config.yaml or app-config.local.yaml
 
   # db:
   #   container_name: db
@@ -23,7 +23,7 @@ services:
 
   rhdh:
     container_name: rhdh
-    image: ${RHDH_IMAGE:-quay.io/rhdh-community/rhdh:1.6}
+    image: ${RHDH_IMAGE:-quay.io/rhdh-community/rhdh:1.8}
     env_file:
       - path: "./default.env"
         required: true
@@ -38,9 +38,13 @@ services:
     environment:
       NODE_OPTIONS: "--inspect=0.0.0.0:9229 --no-node-snapshot"
     volumes:
+      - ./mkdocs.yaml:/opt/app-root/src/mkdocs.yaml:Z
+      - ./docs:/opt/app-root/src/docs:Z
+      - ./catalog-info.yaml:/opt/app-root/src/catalog-info.yaml:Z
       - ./wait-for-plugins-and-start.sh:/opt/app-root/src/wait-for-plugins-and-start.sh:Z
       - ./configs:/opt/app-root/src/configs:Z
       - dynamic-plugins-root:/opt/app-root/src/dynamic-plugins-root
+      - extensions-catalog:/extensions
     depends_on:
       install-dynamic-plugins:
         condition: service_completed_successfully
@@ -49,7 +53,7 @@ services:
 
   install-dynamic-plugins:
     container_name: rhdh-plugins-installer
-    image: ${RHDH_IMAGE:-quay.io/rhdh-community/rhdh:1.6}
+    image: ${RHDH_IMAGE:-quay.io/rhdh-community/rhdh:1.8}
     # docker compose volumes are owned by root, so we need to run as root to write to them
     # the main rhdh container will be able to read from this as files are world readable
     user: "root"
@@ -65,6 +69,8 @@ services:
       - ./local-plugins:/opt/app-root/src/local-plugins:Z
       - ./configs:/opt/app-root/src/configs:Z
       - dynamic-plugins-root:/dynamic-plugins-root
+      - extensions-catalog:${CATALOG_ENTITIES_EXTRACT_DIR:-/extensions}
 
 volumes:
   dynamic-plugins-root:
+  extensions-catalog:

@@ -13,8 +13,9 @@ Please explain the changes you made here.
 
 ## PR acceptance criteria
 
-- [ ] Tests
-- [ ] Documentation
+- [ ] Tests updated and passing
+- [ ] Documentation updated
+- [ ] [Built-in TechDocs](https://github.com/redhat-developer/rhdh-local/tree/main/docs) updated if needed. Note that TechDocs changes may need to be reviewed by a Product Manager and/or Architect to ensure content accuracy, clarity, and alignment with user needs.
 
 ## How to test changes / Special notes to the reviewer
 <!--
